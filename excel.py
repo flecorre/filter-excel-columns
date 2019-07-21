@@ -8,10 +8,11 @@ import openpyxl
 XLS = ".xls"
 XLSX = ".xlsx"
 OUTPUT_FILE_SUFFIX = "_filtered_"
-REPORT_FILE_SUFFIX = "_deleted_"
+GOOD = "_GOOD_"
+WRONG = "_WRONG_"
 TODAY = str(datetime.date.today())
 TXT = ".txt"
-PERCENTAGE_THRESHOLD = 25
+PERCENTAGE_THRESHOLD = 15
 MIN_ROW = 0
 MAX_ROW = 27
 MIN_COL = 2
@@ -20,7 +21,8 @@ MIN_COL = 2
 
 # DECLARE VARIABLES
 columns_index = []  # a list
-columns_info = {}  # a dictionary
+columns_info_wrong = {}  # a dictionary
+columns_info_good = {}
 
 
 # DECLARE FUNCTIONS
@@ -35,9 +37,9 @@ def create_output_excel_file_name(file):
     return filename + OUTPUT_FILE_SUFFIX + TODAY + "." + file_extension
 
 
-def create_report_file_name(file):
+def create_report_file_name(file, good_or_wrong):
     filename = file.split(".")[0]
-    return filename + REPORT_FILE_SUFFIX + TODAY + TXT
+    return filename + good_or_wrong + TODAY + TXT
 
 
 def calculate_percentage_difference(first_value, second_value):
@@ -55,10 +57,10 @@ def delete_columns(columns_list):
         index = index + 1
 
 
-def write_deleted_columns_info_to_file(filename, columns_info):
+def write_columns_info_to_file(filename, columns_info):
     f = open(filename, "w")
     for k, v in columns_info.items():
-        f.write(k+":" + " " + str(v) + "%\n")
+        f.write(k+":" + " " + str(v) + "\n")
     f.close()
 
 
@@ -69,7 +71,8 @@ def write_deleted_columns_info_to_file(filename, columns_info):
 excel_input_file = sys.argv[1]  # take first python argument as an excel file
 check_input_file_extension(excel_input_file)
 excel_output_file = create_output_excel_file_name(excel_input_file)
-report_file = create_report_file_name(excel_input_file)
+report_file_wrong = create_report_file_name(excel_input_file, WRONG)
+report_file_good = create_report_file_name(excel_input_file, GOOD)
 
 
 # 2- OPEN EXCEL FILE
@@ -85,13 +88,17 @@ for col in sheet.iter_cols(min_row=MIN_ROW, min_col=MIN_COL, max_row=MAX_ROW, ma
     difference = calculate_percentage_difference(first_cell_value, second_cell_value)
     if difference > PERCENTAGE_THRESHOLD:
         columns_index.append(col[0].column)
-        columns_info.update({col[0].value: difference})
+        columns_info_wrong.update({col[0].value: difference})
+    else:
+        columns_info_good.update({col[0].value: difference})
 
 
 # 4- DELETE WRONG COLUMNS
 if len(columns_index) != 0:
     delete_columns(columns_index)
-    write_deleted_columns_info_to_file(report_file, columns_info)
+    write_columns_info_to_file(report_file_good, columns_info_good)
+    write_columns_info_to_file(report_file_wrong, columns_info_wrong)
     workbook.save(excel_output_file)
+    print("DONE! " + str(len(columns_index)) + " columns removed")
 else:
     sys.exit("No column to delete")
