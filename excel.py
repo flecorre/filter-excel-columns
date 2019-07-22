@@ -7,12 +7,12 @@ import openpyxl
 # DECLARE CONSTANTS
 XLS = ".xls"
 XLSX = ".xlsx"
-OUTPUT_FILE_SUFFIX = "_filtered_"
 GOOD = "_GOOD_"
 WRONG = "_WRONG_"
+THRESHOLD = "THRESHOLD-"
 TODAY = str(datetime.date.today())
 TXT = ".txt"
-PERCENTAGE_THRESHOLD = 15
+PERCENTAGE_THRESHOLD = 25
 MIN_ROW = 0
 MAX_ROW = 27
 MIN_COL = 2
@@ -34,12 +34,12 @@ def check_input_file_extension(file):
 def create_output_excel_file_name(file):
     filename = file.split(".")[0]
     file_extension = file.split(".")[1]
-    return filename + OUTPUT_FILE_SUFFIX + TODAY + "." + file_extension
+    return filename + "_" + THRESHOLD + str(PERCENTAGE_THRESHOLD) + "_" + TODAY + "." + file_extension
 
 
 def create_report_file_name(file, good_or_wrong):
     filename = file.split(".")[0]
-    return filename + good_or_wrong + TODAY + TXT
+    return filename + good_or_wrong + THRESHOLD + str(PERCENTAGE_THRESHOLD) + "_" + TODAY + TXT
 
 
 def calculate_percentage_difference(first_value, second_value):
@@ -58,16 +58,19 @@ def delete_columns(columns_list):
 
 
 def write_columns_info_to_file(filename, columns_info):
-    f = open(filename, "w")
-    for k, v in columns_info.items():
-        f.write(k+":" + " " + str(v) + "\n")
-    f.close()
+    with open(filename, 'w') as f:
+        for k, v in columns_info.items():
+            f.write(k+":" + " " + str(v) + "\n")
 
 
 # CODE BEGINS HERE
 
+# 1- CHECK IF PERCENTAGE IS GIVEN AS ARGUMENT
+if len(sys.argv) > 2:
+    PERCENTAGE_THRESHOLD = int(sys.argv[2])
 
-# 1- CHECK INPUT FILE IS CORRECT AND PREPARE NAME OF OUTPUT FILES
+
+# 2- CHECK INPUT FILE IS CORRECT AND PREPARE NAME OF OUTPUT FILES
 excel_input_file = sys.argv[1]  # take first python argument as an excel file
 check_input_file_extension(excel_input_file)
 excel_output_file = create_output_excel_file_name(excel_input_file)
@@ -75,13 +78,13 @@ report_file_wrong = create_report_file_name(excel_input_file, WRONG)
 report_file_good = create_report_file_name(excel_input_file, GOOD)
 
 
-# 2- OPEN EXCEL FILE
+# 3- OPEN EXCEL FILE
 workbook = openpyxl.load_workbook(excel_input_file)
 sheet = workbook.active
 MAX_COL = sheet.max_column
 
 
-# 3- ITERATE THROUGH COLUMNS AND IDENTIFY WRONG COLUMNS
+# 4- ITERATE THROUGH COLUMNS AND IDENTIFY WRONG COLUMNS
 for col in sheet.iter_cols(min_row=MIN_ROW, min_col=MIN_COL, max_row=MAX_ROW, max_col=MAX_COL):
     first_cell_value = col[MIN_ROW + 1].value
     second_cell_value = col[MAX_ROW - 1].value
@@ -93,7 +96,7 @@ for col in sheet.iter_cols(min_row=MIN_ROW, min_col=MIN_COL, max_row=MAX_ROW, ma
         columns_info_good.update({col[0].value: difference})
 
 
-# 4- DELETE WRONG COLUMNS
+# 5- DELETE WRONG COLUMNS
 if len(columns_index) != 0:
     delete_columns(columns_index)
     write_columns_info_to_file(report_file_good, columns_info_good)
