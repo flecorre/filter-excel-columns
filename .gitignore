@@ -1,9 +1,0 @@
-.DS_Store
-.idea/
-*.iml
-*.xlsx
-*.xls
-*.txt
-__pycache__/
-*.py[cod]
-*$py.class
