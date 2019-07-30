@@ -9,12 +9,11 @@ import argparse
 STARS = "******************************************************"
 XLS = ".xls"
 XLSX = ".xlsx"
-GOOD = "_good_"
-WRONG = "_wrong_"
-FILTERED = "filtered_"
 THRESHOLD = "threshold-"
-BACKGROUND_SUBTRACTED = "bg-subtracted"
 TXT = ".txt"
+SHEET_BACKGROUND_SUBTRACTED = "bg_subtracted"
+SHEET_GOOD_ROI = "good ROI"
+SHEET_WRONG_ROI = "wrong ROI"
 BACKGROUND_MIN_ROW = 2
 BACKGROUND_COLUMN_INDEX = 2
 FILTER_MIN_ROW = 0
@@ -24,15 +23,14 @@ FILTER_MIN_COL = 2
 
 
 ### VARIABLES ###
-columns_index = []
+columns_index_wrong = []
+columns_index_good = []
 columns_info_wrong = {}
 columns_info_good = {}
-excel_background_subtracted_file = ""
-excel_filtered_file = ""
+excel_output_file = ""
 report_file_wrong = ""
 report_file_good = ""
 workbook = None
-sheet = None
 percentage_threshold = None
 skip_background = None
 
@@ -68,41 +66,23 @@ def valid_arg_threshold(param):
 
 
 def prepare_output_files(excel_file):
-    global excel_background_subtracted_file
-    global excel_filtered_file
+    global excel_output_file
     global report_file_wrong
     global report_file_good
     check_file_extension(excel_file)
-    excel_background_subtracted_file = create_output_excel_file_name(excel_file, BACKGROUND_SUBTRACTED)
-    filtered_threshold = FILTERED + THRESHOLD + str(percentage_threshold)
-    excel_filtered_file = create_output_excel_file_name(excel_file, filtered_threshold)
-    report_file_wrong = create_report_file_name(excel_file, WRONG)
-    report_file_good = create_report_file_name(excel_file, GOOD)
-
-
-def open_excel_file(excel_file):
-    global workbook
-    global sheet
-    logging.info("********* {} *********".format(excel_file))
-    logging.info("opening file...")
-    workbook = openpyxl.load_workbook(excel_file)
-    sheet = workbook.active
+    filtered_threshold = THRESHOLD + str(percentage_threshold)
+    excel_output_file = create_output_excel_file_name(excel_file, filtered_threshold)
 
 
 def check_file_extension(file):
     if not file.lower().endswith((XLS, XLSX)):
-        raise TypeError('File extension is missing or file is not an excel file')
+        raise TypeError('{} extension is missing or file is not an excel file'.format(file))
 
 
 def create_output_excel_file_name(file, suffix):
     filename = file.split(".")[0]
     file_extension = file.split(".")[1]
     return filename + "_" + suffix + "." + file_extension
-
-
-def create_report_file_name(file, good_or_wrong):
-    filename = file.split(".")[0]
-    return filename + good_or_wrong + THRESHOLD + str(percentage_threshold) + TXT
 
 
 def calculate_percentage_difference(first_value, second_value):
@@ -118,82 +98,103 @@ def delete_columns(sheet, columns_list):
     for column in columns_list:
         sheet.delete_cols(column - index)
         index = index + 1
-    logging.info("{} columns removed...".format(str(len(columns_list))))
 
 
-def write_columns_info_to_file(filename, columns_info):
-    with open(filename, 'w') as f:
-        for k, v in columns_info.items():
-            f.write(k + ":" + " " + str(v) + "\n")
+def write_ROI_percentages(sheet, columns_dict):
+    next_row = 1
+    for k, v in columns_dict.items():
+        sheet.cell(column=1, row=next_row, value=k)
+        sheet.cell(column=2, row=next_row, value=v)
+        next_row += 1
 
 
-def reinit_excel_variables():
-    global columns_index
+def clear_columns():
+    global columns_index_good
+    global columns_index_wrong
     global columns_info_wrong
     global columns_info_good
-    global excel_background_subtracted_file
-    global excel_filtered_file
-    global report_file_wrong
-    global report_file_good
     global workbook
-    global sheet
-    columns_index = []
+    columns_index_good = []
+    columns_index_wrong = []
     columns_info_wrong = {}
     columns_info_good = {}
-    excel_background_subtracted_file = ""
-    excel_filtered_file = ""
-    report_file_wrong = ""
-    report_file_good = ""
     workbook = None
-    sheet = None
 
 
-def subtract_background(workbook, sheet):
+def open_excel_file(excel_file):
+    global workbook
+    logging.info("opening '{}'...".format(excel_file))
+    workbook = openpyxl.load_workbook(excel_file)
+
+
+def copy_original_data(wb):
+    sheet = wb.active
+    copy_sheet = wb.copy_worksheet(sheet)
+    copy_sheet.title = "original data"
+
+
+def subtract_background(wb):
+    sheet = wb.active
+    subtracted_bg_sheet = wb.copy_worksheet(sheet)
+    subtracted_bg_sheet.title = SHEET_BACKGROUND_SUBTRACTED
     logging.info("subtracting background...")
-    for row in sheet.iter_rows(min_row=BACKGROUND_MIN_ROW, min_col=BACKGROUND_COLUMN_INDEX):
+    for row in subtracted_bg_sheet.iter_rows(min_row=BACKGROUND_MIN_ROW, min_col=BACKGROUND_COLUMN_INDEX):
         background_cell = row[0].value
         for cell in row:
             cell.value = cell.value - background_cell
-    sheet.delete_cols(BACKGROUND_COLUMN_INDEX)
-    logging.info("writing background filtered file: '{}'".format(excel_background_subtracted_file))
-    workbook.save(excel_background_subtracted_file)
+    subtracted_bg_sheet.delete_cols(BACKGROUND_COLUMN_INDEX)
 
 
-def filter_columns(workbook, sheet):
+def filter_columns(wb):
+    if not skip_background:
+        sheet = wb[SHEET_BACKGROUND_SUBTRACTED]
+    else:
+        sheet = wb.active
+
     FILTER_MAX_COL = sheet.max_column
 
     # ITERATE THROUGH COLUMNS AND IDENTIFY BAD COLUMNS GIVEN THE THRESHOLD PERCENTAGE
-    logging.info("calculating threshold for every ROI...")
+    logging.info("processing ROIs...")
     for col in sheet.iter_cols(min_row=FILTER_MIN_ROW, min_col=FILTER_MIN_COL, max_row=FILTER_MAX_ROW, max_col=FILTER_MAX_COL):
         first_cell_value = col[FILTER_MIN_ROW + 1].value
         second_cell_value = col[FILTER_MAX_ROW - 1].value
         difference = calculate_percentage_difference(first_cell_value, second_cell_value)
         if difference > percentage_threshold:
-            columns_index.append(col[0].column)
+            columns_index_wrong.append(col[0].column)
             columns_info_wrong.update({col[0].value: difference})
         else:
+            columns_index_good.append(col[0].column)
             columns_info_good.update({col[0].value: difference})
 
     # DELETE COLUMNS
-    logging.info("deleting columns...")
-    if len(columns_index) != 0:
-        delete_columns(sheet, columns_index)
-        logging.info("writing report files: '{}' and '{}'".format(report_file_good, report_file_wrong))
-        write_columns_info_to_file(report_file_good, columns_info_good)
-        write_columns_info_to_file(report_file_wrong, columns_info_wrong)
-        logging.info("writing filtered file: '{}'".format(excel_filtered_file))
-        workbook.save(excel_filtered_file)
+    if len(columns_index_wrong) != 0:
+        logging.info("{} good columns found...".format(str(len(columns_index_good))))
+        logging.info("{} wrong columns found...".format(str(len(columns_index_wrong))))
+        logging.info("deleting columns...")
+        sheet_good_roi = wb.copy_worksheet(sheet)
+        sheet_good_roi.title = SHEET_GOOD_ROI
+        sheet_wrong_roi = wb.copy_worksheet(sheet)
+        sheet_wrong_roi.title = SHEET_WRONG_ROI
+        delete_columns(sheet_good_roi, columns_index_good)
+        delete_columns(sheet_wrong_roi, columns_index_wrong)
+        wb.create_sheet('result above')
+        wb.create_sheet('result below')
+        write_ROI_percentages(wb['result below'], columns_info_good)
+        write_ROI_percentages(wb['result above'], columns_info_wrong)
+        logging.info("writing processed data to: '{}'".format(excel_output_file))
+        workbook.save(excel_output_file)
     else:
         logging.critical("no column to delete...")
 
 
-def main(line):
-    prepare_output_files(line)
-    open_excel_file(line)
+def main(excel_file):
+    prepare_output_files(excel_file)
+    open_excel_file(excel_file)
     if not skip_background:
-        subtract_background(workbook, sheet)
-    filter_columns(workbook, sheet)
-    reinit_excel_variables()
+        subtract_background(workbook)
+    filter_columns(workbook)
+    clear_columns()
+    logging.info("DONE!")
     logging.info(STARS)
 
 
@@ -212,13 +213,12 @@ mutually_exclusive.add_argument('-l', '--list', dest='excel_list', type=valid_ar
 args = parser.parse_args()
 
 # SET PERCENTAGE THRESHOLD VALUE (default is 25)
-percentage_threshold = args.threshold
+percentage_threshold = int(args.threshold)
 logging.info("************** THRESHOLD IS SET TO: {}% **************".format(str(percentage_threshold)))
 
 skip_background = args.skip_background
 if skip_background:
     logging.info("************** BACKGROUND SUBTRACTION STEP WILL BE SKIPPED **************")
-logging.info(STARS)
 
 # CHECK IF PROGRAM SHOULD PROCESS A EXCEL FILE OR A LIST OF EXCEL FILES
 if args.excel_list is not None:
