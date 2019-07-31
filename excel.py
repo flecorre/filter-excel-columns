@@ -14,6 +14,8 @@ TXT = ".txt"
 SHEET_BACKGROUND_SUBTRACTED = "bg_subtracted"
 SHEET_GOOD_ROI = "good ROI"
 SHEET_WRONG_ROI = "wrong ROI"
+RESULT_ABOVE = "result above"
+RESULT_BELOW = "result below"
 BACKGROUND_MIN_ROW = 2
 BACKGROUND_COLUMN_INDEX = 2
 FILTER_MIN_ROW = 0
@@ -100,7 +102,7 @@ def delete_columns(sheet, columns_list):
         index = index + 1
 
 
-def write_ROI_percentages(sheet, columns_dict):
+def write_roi_percentages(sheet, columns_dict):
     next_row = 1
     for k, v in columns_dict.items():
         sheet.cell(column=1, row=next_row, value=k)
@@ -118,7 +120,6 @@ def clear_columns():
     columns_index_wrong = []
     columns_info_wrong = {}
     columns_info_good = {}
-    workbook = None
 
 
 def open_excel_file(excel_file):
@@ -133,10 +134,15 @@ def copy_original_data(wb):
     copy_sheet.title = "original data"
 
 
+def copy_worksheet(wb, sheet, title):
+    new_worksheet = wb.copy_worksheet(sheet)
+    new_worksheet.title = title
+    return new_worksheet
+
+
 def subtract_background(wb):
     sheet = wb.active
-    subtracted_bg_sheet = wb.copy_worksheet(sheet)
-    subtracted_bg_sheet.title = SHEET_BACKGROUND_SUBTRACTED
+    subtracted_bg_sheet = copy_worksheet(wb, sheet, SHEET_BACKGROUND_SUBTRACTED)
     logging.info("subtracting background...")
     for row in subtracted_bg_sheet.iter_rows(min_row=BACKGROUND_MIN_ROW, min_col=BACKGROUND_COLUMN_INDEX):
         background_cell = row[0].value
@@ -166,21 +172,20 @@ def filter_columns(wb):
             columns_index_good.append(col[0].column)
             columns_info_good.update({col[0].value: difference})
 
-    # DELETE COLUMNS
+    # DELETE COLUMNS IF WRONG COLUMNS ARE FOUND
     if len(columns_index_wrong) != 0:
         logging.info("{} good columns found...".format(str(len(columns_index_good))))
         logging.info("{} wrong columns found...".format(str(len(columns_index_wrong))))
         logging.info("deleting columns...")
-        sheet_good_roi = wb.copy_worksheet(sheet)
-        sheet_good_roi.title = SHEET_GOOD_ROI
-        sheet_wrong_roi = wb.copy_worksheet(sheet)
-        sheet_wrong_roi.title = SHEET_WRONG_ROI
+        sheet_good_roi = copy_worksheet(wb, sheet, SHEET_GOOD_ROI)
+        sheet_wrong_roi = copy_worksheet(wb, sheet, SHEET_WRONG_ROI)
         delete_columns(sheet_good_roi, columns_index_good)
         delete_columns(sheet_wrong_roi, columns_index_wrong)
-        wb.create_sheet('result above')
-        wb.create_sheet('result below')
-        write_ROI_percentages(wb['result below'], columns_info_good)
-        write_ROI_percentages(wb['result above'], columns_info_wrong)
+        # Create new sheets to write percentage calculation results
+        wb.create_sheet(RESULT_ABOVE)
+        wb.create_sheet(RESULT_BELOW)
+        write_roi_percentages(wb[RESULT_ABOVE], columns_info_wrong)
+        write_roi_percentages(wb[RESULT_BELOW], columns_info_good)
         logging.info("writing processed data to: '{}'".format(excel_output_file))
         workbook.save(excel_output_file)
     else:
