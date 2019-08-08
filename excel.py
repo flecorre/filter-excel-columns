@@ -190,10 +190,13 @@ def normalize_selected_value(value, mean):
 def calculate_mean_and_normalize_roi(wb, sheet_to_calculate, title_for_new_mean_sheet):
     normalized_sheet_title = "{} normalized".format(sheet_to_calculate)
     selected_sheet = copy_worksheet(wb, wb[sheet_to_calculate], normalized_sheet_title)
-    FILTER_MAX_COL = selected_sheet.max_column
+    min_col = 2
+    max_col = selected_sheet.max_column
+    min_row = 0
+    max_row = selected_sheet.max_row
     columns_mean = {}
     logging.info("calculating means and normalizing {}...".format(sheet_to_calculate))
-    for col in selected_sheet.iter_cols(min_row=FILTER_MIN_ROW, min_col=FILTER_MIN_COL, max_row=FILTER_MAX_ROW, max_col=FILTER_MAX_COL):
+    for col in selected_sheet.iter_cols(min_row=min_row, min_col=min_col, max_row=max_row, max_col=max_col):
         sum_roi_value = 0
         number_roi_values = 0
         # Iterate a first time to calculate the mean
@@ -203,7 +206,7 @@ def calculate_mean_and_normalize_roi(wb, sheet_to_calculate, title_for_new_mean_
                 number_roi_values += 1
         mean = (sum_roi_value / number_roi_values)
         columns_mean.update({col[0].value: mean})
-        # Iterate a second time to normalized
+        # Iterate a second time to normalize
         for cell in col:
             if not cell.value == col[0].value:
                 cell.value = normalize_selected_value(cell.value, mean)
@@ -217,7 +220,7 @@ def main(excel_file):
     if not skip_background:
         subtract_background(workbook)
     filter_columns(workbook)
-    if not skip_normalize:
+    if not skip_normalization:
         calculate_mean_and_normalize_roi(workbook, SHEET_GOOD_ROI, MEAN_GOOD_ROI)
         calculate_mean_and_normalize_roi(workbook, SHEET_WRONG_ROI, MEAN_WRONG_ROI)
     logging.info("writing processed data to: '{}'".format(excel_output_file))
@@ -233,7 +236,7 @@ def main(excel_file):
 # PARSE ARGUMENTS
 parser = argparse.ArgumentParser()
 parser.add_argument('-sbg', '--skip-bg', dest='skip_background', action='store_true', default=False, help="skip background subtraction step")
-parser.add_argument('-snz', '--skip-normalize', dest='skip_normalize', action='store_true', default=False, help="skip mean calculation and normalization steps")
+parser.add_argument('-snz', '--skip-normalize', dest='skip_normalization', action='store_true', default=False, help="skip mean calculation and normalization steps")
 parser.add_argument('-t', '--threshold', dest='threshold', type=valid_arg_threshold, default=25, help="override threshold value")
 mutually_exclusive = parser.add_mutually_exclusive_group(required=True)
 mutually_exclusive.add_argument('-e', '--excel', dest='excel_file', type=valid_arg_excel, help='process only one excel file')
@@ -249,8 +252,8 @@ skip_background = args.skip_background
 if skip_background:
     logging.info("************** BACKGROUND SUBTRACTION STEP WILL BE SKIPPED **************")
 
-skip_normalize = args.skip_normalize
-if skip_normalize:
+skip_normalization = args.skip_normalization
+if skip_normalization:
     logging.info("************** NORMALIZATION STEP WILL BE SKIPPED **************")
 
 # CHECK IF PROGRAM SHOULD PROCESS A EXCEL FILE OR A LIST OF EXCEL FILES
