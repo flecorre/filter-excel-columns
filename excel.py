@@ -14,17 +14,20 @@ TXT = ".txt"
 SHEET_BACKGROUND_SUBTRACTED = "bg_subtracted"
 SHEET_GOOD_ROI = "good ROI"
 SHEET_WRONG_ROI = "wrong ROI"
+MEAN_GOOD_ROI = "mean good ROI"
+MEAN_WRONG_ROI = "mean wrong ROI"
 RESULT_ABOVE = "result above "
 RESULT_BELOW = "result below "
 BACKGROUND_MIN_ROW = 2
 BACKGROUND_COLUMN_INDEX = 2
 FILTER_MIN_ROW = 0
-FILTER_MAX_ROW = 22
+FILTER_MAX_ROW = 21
 FILTER_MIN_COL = 2
 # ~~ FILTER_MAX_COL is set automatically below before filtering
 
 
 ### VARIABLES ###
+# columns used during filtering
 columns_index_wrong = []
 columns_index_good = []
 columns_info_wrong = {}
@@ -102,7 +105,7 @@ def delete_columns(sheet, columns_list):
         index = index + 1
 
 
-def write_roi_percentages(sheet, columns_dict):
+def write_data(sheet, columns_dict):
     next_row = 1
     for k, v in columns_dict.items():
         sheet.cell(column=1, row=next_row, value=k)
@@ -182,16 +185,41 @@ def filter_columns(wb):
         delete_columns(sheet_good_roi, columns_index_wrong)
         delete_columns(sheet_wrong_roi, columns_index_good)
         # Create new sheets to write percentage calculation results
-        result_above_threshold_title = RESULT_ABOVE + str(percentage_threshold) + "%"
-        result_below_threshold_title = RESULT_BELOW + str(percentage_threshold) + "%"
+        result_above_threshold_title = "{} {} %".format(RESULT_ABOVE, str(percentage_threshold))
+        result_below_threshold_title = "{} {} %".format(RESULT_BELOW, str(percentage_threshold))
         wb.create_sheet(result_above_threshold_title)
         wb.create_sheet(result_below_threshold_title)
-        write_roi_percentages(wb[result_above_threshold_title], columns_info_wrong)
-        write_roi_percentages(wb[result_below_threshold_title], columns_info_good)
-        logging.info("writing processed data to: '{}'".format(excel_output_file))
-        workbook.save(excel_output_file)
+        write_data(wb[result_above_threshold_title], columns_info_wrong)
+        write_data(wb[result_below_threshold_title], columns_info_good)
     else:
         logging.critical("no column to delete...")
+
+
+def normalize_selected_value(value, mean):
+    return (value - mean) / mean
+
+
+def calculate_mean_and_normalize_roi(wb, sheet_to_calculate, title_for_new_mean_sheet):
+    normalized_sheet_title = "{} normalized".format(sheet_to_calculate)
+    selected_sheet = copy_worksheet(wb, wb[sheet_to_calculate], normalized_sheet_title)
+    FILTER_MAX_COL = selected_sheet.max_column
+    columns_mean = {}
+    for col in selected_sheet.iter_cols(min_row=FILTER_MIN_ROW, min_col=FILTER_MIN_COL, max_row=FILTER_MAX_ROW, max_col=FILTER_MAX_COL):
+        sum_roi_value = 0
+        number_roi_values = 0
+        # Iterate a first time to calculate the mean
+        for cell in col:
+            if not cell.value == col[0].value:
+                sum_roi_value += cell.value
+                number_roi_values += 1
+        mean = (sum_roi_value / number_roi_values)
+        columns_mean.update({col[0].value: mean})
+        # Iterate a second time to normalized
+        for cell in col:
+            if not cell.value == col[0].value:
+                cell.value = normalize_selected_value(cell.value, mean)
+    wb.create_sheet(title_for_new_mean_sheet)
+    write_data(wb[title_for_new_mean_sheet], columns_mean)
 
 
 def main(excel_file):
@@ -200,7 +228,12 @@ def main(excel_file):
     if not skip_background:
         subtract_background(workbook)
     filter_columns(workbook)
+    if not skip_normalize:
+        calculate_mean_and_normalize_roi(workbook, SHEET_GOOD_ROI, MEAN_GOOD_ROI)
+        calculate_mean_and_normalize_roi(workbook, SHEET_WRONG_ROI, MEAN_WRONG_ROI)
     clear_columns()
+    logging.info("writing processed data to: '{}'".format(excel_output_file))
+    workbook.save(excel_output_file)
     logging.info("DONE!")
     logging.info(STARS)
 
@@ -212,6 +245,7 @@ def main(excel_file):
 # PARSE ARGUMENTS
 parser = argparse.ArgumentParser()
 parser.add_argument('-sbg', '--skip-bg', dest='skip_background', action='store_true', default=False, help="skip background subtraction step")
+parser.add_argument('-snz', '--skip-normalize', dest='skip_normalize', action='store_true', default=False, help="skip mean calculation and normalization steps")
 parser.add_argument('-t', '--threshold', dest='threshold', type=valid_arg_threshold, default=25, help="override threshold value")
 mutually_exclusive = parser.add_mutually_exclusive_group(required=True)
 mutually_exclusive.add_argument('-e', '--excel', dest='excel_file', type=valid_arg_excel, help='process only one excel file')
@@ -226,6 +260,10 @@ logging.info("************** THRESHOLD IS SET TO: {}% **************".format(str
 skip_background = args.skip_background
 if skip_background:
     logging.info("************** BACKGROUND SUBTRACTION STEP WILL BE SKIPPED **************")
+
+skip_normalize = args.skip_normalize
+if skip_normalize:
+    logging.info("************** NORMALIZATION STEP WILL BE SKIPPED **************")
 
 # CHECK IF PROGRAM SHOULD PROCESS A EXCEL FILE OR A LIST OF EXCEL FILES
 if args.excel_list is not None:
