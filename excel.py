@@ -14,12 +14,12 @@ TXT = ".txt"
 SHEET_BACKGROUND_SUBTRACTED = "bg_subtracted"
 SHEET_GOOD_ROI = "good ROI"
 SHEET_WRONG_ROI = "wrong ROI"
-RESULT_ABOVE = "result above"
-RESULT_BELOW = "result below"
+RESULT_ABOVE = "result above "
+RESULT_BELOW = "result below "
 BACKGROUND_MIN_ROW = 2
 BACKGROUND_COLUMN_INDEX = 2
 FILTER_MIN_ROW = 0
-FILTER_MAX_ROW = 27
+FILTER_MAX_ROW = 22
 FILTER_MIN_COL = 2
 # ~~ FILTER_MAX_COL is set automatically below before filtering
 
@@ -165,7 +165,7 @@ def filter_columns(wb):
         first_cell_value = col[FILTER_MIN_ROW + 1].value
         second_cell_value = col[FILTER_MAX_ROW - 1].value
         difference = calculate_percentage_difference(first_cell_value, second_cell_value)
-        if difference > percentage_threshold:
+        if difference > percentage_threshold or difference < 0:
             columns_index_wrong.append(col[0].column)
             columns_info_wrong.update({col[0].value: difference})
         else:
@@ -179,13 +179,15 @@ def filter_columns(wb):
         logging.info("deleting columns...")
         sheet_good_roi = copy_worksheet(wb, sheet, SHEET_GOOD_ROI)
         sheet_wrong_roi = copy_worksheet(wb, sheet, SHEET_WRONG_ROI)
-        delete_columns(sheet_good_roi, columns_index_good)
-        delete_columns(sheet_wrong_roi, columns_index_wrong)
+        delete_columns(sheet_good_roi, columns_index_wrong)
+        delete_columns(sheet_wrong_roi, columns_index_good)
         # Create new sheets to write percentage calculation results
-        wb.create_sheet(RESULT_ABOVE)
-        wb.create_sheet(RESULT_BELOW)
-        write_roi_percentages(wb[RESULT_ABOVE], columns_info_wrong)
-        write_roi_percentages(wb[RESULT_BELOW], columns_info_good)
+        result_above_threshold_title = RESULT_ABOVE + str(percentage_threshold) + "%"
+        result_below_threshold_title = RESULT_BELOW + str(percentage_threshold) + "%"
+        wb.create_sheet(result_above_threshold_title)
+        wb.create_sheet(result_below_threshold_title)
+        write_roi_percentages(wb[result_above_threshold_title], columns_info_wrong)
+        write_roi_percentages(wb[result_below_threshold_title], columns_info_good)
         logging.info("writing processed data to: '{}'".format(excel_output_file))
         workbook.save(excel_output_file)
     else:
