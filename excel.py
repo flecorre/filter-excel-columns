@@ -147,7 +147,7 @@ def filter_columns(wb):
     FILTER_MAX_COL = sheet.max_column
 
     # ITERATE THROUGH COLUMNS AND IDENTIFY BAD COLUMNS GIVEN THE THRESHOLD PERCENTAGE
-    logging.info("processing ROIs...")
+    logging.info("filtering ROIs...")
     columns_index_wrong = []
     columns_index_good = []
     columns_info_wrong = {}
@@ -192,6 +192,7 @@ def calculate_mean_and_normalize_roi(wb, sheet_to_calculate, title_for_new_mean_
     selected_sheet = copy_worksheet(wb, wb[sheet_to_calculate], normalized_sheet_title)
     FILTER_MAX_COL = selected_sheet.max_column
     columns_mean = {}
+    logging.info("calculating means and normalizing {}...".format(sheet_to_calculate))
     for col in selected_sheet.iter_cols(min_row=FILTER_MIN_ROW, min_col=FILTER_MIN_COL, max_row=FILTER_MAX_ROW, max_col=FILTER_MAX_COL):
         sum_roi_value = 0
         number_roi_values = 0
