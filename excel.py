@@ -16,8 +16,8 @@ SHEET_GOOD_ROI = "good ROI"
 SHEET_WRONG_ROI = "wrong ROI"
 MEAN_GOOD_ROI = "mean good ROI"
 MEAN_WRONG_ROI = "mean wrong ROI"
-RESULT_ABOVE = "result above "
-RESULT_BELOW = "result below "
+RESULT_ABOVE = "result above"
+RESULT_BELOW = "result below"
 BACKGROUND_MIN_ROW = 2
 BACKGROUND_COLUMN_INDEX = 2
 FILTER_MIN_ROW = 0
@@ -28,10 +28,6 @@ FILTER_MIN_COL = 2
 
 ### VARIABLES ###
 # columns used during filtering
-columns_index_wrong = []
-columns_index_good = []
-columns_info_wrong = {}
-columns_info_good = {}
 excel_output_file = ""
 report_file_wrong = ""
 report_file_good = ""
@@ -113,18 +109,6 @@ def write_data(sheet, columns_dict):
         next_row += 1
 
 
-def clear_columns():
-    global columns_index_good
-    global columns_index_wrong
-    global columns_info_wrong
-    global columns_info_good
-    global workbook
-    columns_index_good = []
-    columns_index_wrong = []
-    columns_info_wrong = {}
-    columns_info_good = {}
-
-
 def open_excel_file(excel_file):
     global workbook
     logging.info("opening '{}'...".format(excel_file))
@@ -164,6 +148,10 @@ def filter_columns(wb):
 
     # ITERATE THROUGH COLUMNS AND IDENTIFY BAD COLUMNS GIVEN THE THRESHOLD PERCENTAGE
     logging.info("processing ROIs...")
+    columns_index_wrong = []
+    columns_index_good = []
+    columns_info_wrong = {}
+    columns_info_good = {}
     for col in sheet.iter_cols(min_row=FILTER_MIN_ROW, min_col=FILTER_MIN_COL, max_row=FILTER_MAX_ROW, max_col=FILTER_MAX_COL):
         first_cell_value = col[FILTER_MIN_ROW + 1].value
         second_cell_value = col[FILTER_MAX_ROW - 1].value
@@ -231,7 +219,6 @@ def main(excel_file):
     if not skip_normalize:
         calculate_mean_and_normalize_roi(workbook, SHEET_GOOD_ROI, MEAN_GOOD_ROI)
         calculate_mean_and_normalize_roi(workbook, SHEET_WRONG_ROI, MEAN_WRONG_ROI)
-    clear_columns()
     logging.info("writing processed data to: '{}'".format(excel_output_file))
     workbook.save(excel_output_file)
     logging.info("DONE!")
