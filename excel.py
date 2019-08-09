@@ -183,8 +183,11 @@ def filter_columns(wb):
         logging.critical("no column to delete...")
 
 
-def normalize_selected_value(value, mean):
-    return (value - mean) / mean
+def normalize_selected_value(value, target_roi_column, dict_of_means):
+    for k in dict_of_means:
+        if k == target_roi_column:
+            mean = dict_of_means.get(k)
+            return (value - mean) / mean
 
 
 def calculate_mean_and_normalize_roi(wb, sheet_to_calculate, title_for_new_mean_sheet):
@@ -193,23 +196,28 @@ def calculate_mean_and_normalize_roi(wb, sheet_to_calculate, title_for_new_mean_
     min_col = 2
     max_col = selected_sheet.max_column
     min_row = 0
-    max_row = selected_sheet.max_row
+    max_row_mean_calculation = 21
+    max_row_normalization = selected_sheet.max_row
     columns_mean = {}
     logging.info("calculating means and normalizing {}...".format(sheet_to_calculate))
-    for col in selected_sheet.iter_cols(min_row=min_row, min_col=min_col, max_row=max_row, max_col=max_col):
+    for col in selected_sheet.iter_cols(min_row=min_row, min_col=min_col, max_row=max_row_mean_calculation, max_col=max_col):
         sum_roi_value = 0
         number_roi_values = 0
         # Iterate a first time to calculate the mean
         for cell in col:
-            if not cell.value == col[0].value:
+            # Condition needed to remove ROI column title from processing...
+            column_title = col[0].value
+            if not cell.value == column_title:
                 sum_roi_value += cell.value
                 number_roi_values += 1
         mean = (sum_roi_value / number_roi_values)
         columns_mean.update({col[0].value: mean})
-        # Iterate a second time to normalize
+    # Iterate a second time to normalize
+    for col in selected_sheet.iter_cols(min_row=min_row, min_col=min_col, max_row=max_row_normalization, max_col=max_col):
         for cell in col:
-            if not cell.value == col[0].value:
-                cell.value = normalize_selected_value(cell.value, mean)
+            column_title = col[0].value
+            if not cell.value == column_title:
+                cell.value = normalize_selected_value(cell.value, column_title, columns_mean)
     wb.create_sheet(title_for_new_mean_sheet)
     write_data(wb[title_for_new_mean_sheet], columns_mean)
 
