@@ -196,18 +196,20 @@ def calculate_mean_and_normalize_roi(wb, sheet_to_calculate, title_for_new_mean_
     min_col = 2
     max_col = selected_sheet.max_column
     min_row = 0
-    max_row_mean_calculation = 21
+    min_row_mean_calculation = 22
+    max_row_mean_calculation = 41
     max_row_normalization = selected_sheet.max_row
     columns_mean = {}
     logging.info("calculating means and normalizing {}...".format(sheet_to_calculate))
+    logging.info("mean minimum row: {}...".format(min_row_mean_calculation))
+    logging.info("mean maximum row: {}...".format(max_row_mean_calculation))
     for col in selected_sheet.iter_cols(min_row=min_row, min_col=min_col, max_row=max_row_mean_calculation, max_col=max_col):
         sum_roi_value = 0
         number_roi_values = 0
         # Iterate a first time to calculate the mean
         for cell in col:
             # Condition needed to remove ROI column title from processing...
-            column_title = col[0].value
-            if not cell.value == column_title:
+            if cell.row >= min_row_mean_calculation:
                 sum_roi_value += cell.value
                 number_roi_values += 1
         mean = (sum_roi_value / number_roi_values)
