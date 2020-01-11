@@ -3,6 +3,7 @@
 import openpyxl
 import logging
 import argparse
+import sys
 
 
 ### CONSTANTS ###
@@ -21,7 +22,7 @@ RESULT_BELOW = "result below"
 BACKGROUND_MIN_ROW = 2
 BACKGROUND_COLUMN_INDEX = 2
 FILTER_MIN_ROW = 0
-FILTER_MAX_ROW = 21
+FILTER_MAX_ROW = 41
 FILTER_MIN_COL = 2
 # ~~ FILTER_MAX_COL is set automatically below before filtering
 
@@ -38,7 +39,6 @@ logging.basicConfig(format='%(asctime)s - %(message)s', level=logging.INFO)
 
 
 ### FUNCTIONS ###
-
 def valid_arg_list(param):
     if not(param.lower().endswith(TXT)):
         msg = "{} is not a valid list. Should be a .txt file".format(param)
@@ -162,7 +162,13 @@ def subtract_background(wb):
     for row in subtracted_bg_sheet.iter_rows(min_row=BACKGROUND_MIN_ROW, min_col=BACKGROUND_COLUMN_INDEX):
         background_cell = row[0].value
         for cell in row:
-            cell.value = cell.value - background_cell
+            if cell.value is not None:
+                result = cell.value - background_cell
+                if result != 0:
+                    cell.value = result
+                elif result == 0 and cell.column != BACKGROUND_COLUMN_INDEX:
+                    msg_duplicate_bg_row = "/!\ ERROR: COLUMN {} IS THE SAME AS BACKGROUND COLUMN".format(cell.column)
+                    sys.exit(msg_duplicate_bg_row)
     subtracted_bg_sheet.delete_cols(BACKGROUND_COLUMN_INDEX)
 
 
@@ -180,15 +186,16 @@ def filter_columns(wb):
     columns_info_wrong = {}
     columns_info_good = {}
     for col in sheet.iter_cols(min_row=FILTER_MIN_ROW, min_col=FILTER_MIN_COL, max_row=FILTER_MAX_ROW, max_col=FILTER_MAX_COL):
-        first_mean = get_mean_from_range_of_rows(col, first_range)
-        second_mean = get_mean_from_range_of_rows(col, second_range)
-        difference = calculate_percentage_difference(first_mean, second_mean)
-        if difference > percentage_threshold or difference < 0:
-            columns_index_wrong.append(col[0].column)
-            columns_info_wrong.update({col[0].value: difference})
-        else:
-            columns_index_good.append(col[0].column)
-            columns_info_good.update({col[0].value: difference})
+        if col[0].value is not None:
+            first_mean = get_mean_from_range_of_rows(col, first_range)
+            second_mean = get_mean_from_range_of_rows(col, second_range)
+            difference = calculate_percentage_difference(first_mean, second_mean)
+            if difference > percentage_threshold or difference < 0:
+                columns_index_wrong.append(col[0].column)
+                columns_info_wrong.update({col[0].value: difference})
+            else:
+                columns_index_good.append(col[0].column)
+                columns_info_good.update({col[0].value: difference})
 
     # DELETE COLUMNS IF WRONG COLUMNS ARE FOUND
     if len(columns_index_wrong) != 0:
@@ -232,21 +239,23 @@ def calculate_mean_and_normalize_roi(wb, sheet_to_calculate, title_for_new_mean_
     logging.info("mean maximum row: {}...".format(max_row_mean_calculation))
     # ITERATE A FIRST TIME TO CALCULATE THE MEAN
     for col in selected_sheet.iter_cols(min_row=min_row, min_col=min_col, max_row=max_row_mean_calculation, max_col=max_col):
-        sum_roi_value = 0
-        number_roi_values = 0
-        for cell in col:
-            # CONDITION NEEDED TO SKIP THE COLUMN TITLE
-            if cell.row >= min_row_mean_calculation:
-                sum_roi_value += cell.value
-                number_roi_values += 1
-        mean = (sum_roi_value / number_roi_values)
-        columns_mean.update({col[0].value: mean})
+        if col[0].value is not None:
+            sum_roi_value = 0
+            number_roi_values = 0
+            for cell in col:
+                # CONDITION NEEDED TO SKIP THE COLUMN TITLE
+                if cell.row >= min_row_mean_calculation:
+                    sum_roi_value += cell.value
+                    number_roi_values += 1
+            mean = (sum_roi_value / number_roi_values)
+            columns_mean.update({col[0].value: mean})
     # Iterate a second time to normalize
     for col in selected_sheet.iter_cols(min_row=min_row, min_col=min_col, max_row=max_row_normalization, max_col=max_col):
-        for cell in col:
-            column_title = col[0].value
-            if not cell.value == column_title:
-                cell.value = normalize_selected_value(cell.value, column_title, columns_mean)
+        if col[0].value is not None:
+            for cell in col:
+                column_title = col[0].value
+                if not cell.value == column_title:
+                    cell.value = normalize_selected_value(cell.value, column_title, columns_mean)
     wb.create_sheet(title_for_new_mean_sheet)
     write_data(wb[title_for_new_mean_sheet], columns_mean)
 
